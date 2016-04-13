@@ -1,0 +1,262 @@
+diff --git a/conf/vanilla/autoload_configs/sofia.conf.xml b/conf/vanilla/autoload_configs/sofia.conf.xml
+index a5e8614..be40ba2 100644
+--- a/conf/vanilla/autoload_configs/sofia.conf.xml
++++ b/conf/vanilla/autoload_configs/sofia.conf.xml
+@@ -5,6 +5,15 @@
+     <!-- <param name="auto-restart" value="false"/> -->
+     <param name="debug-presence" value="0"/>
+     <!-- <param name="capture-server" value="udp:homer.domain.com:5060"/> -->
++    
++    <!-- 
++    	the new format for HEPv2/v3 and capture ID    
++	
++	protocol:host:port;hep=2;capture_id=200;
++
++    -->
++    
++    <!-- <param name="capture-server" value="udp:homer.domain.com:5060;hep=2;capture_id=100"/> -->
+   </global_settings>
+ 
+   <!--
+diff --git a/libs/sofia-sip/libsofia-sip-ua/msg/msg_internal.h b/libs/sofia-sip/libsofia-sip-ua/msg/msg_internal.h
+index 60bc009..9de1820 100644
+--- a/libs/sofia-sip/libsofia-sip-ua/msg/msg_internal.h
++++ b/libs/sofia-sip/libsofia-sip-ua/msg/msg_internal.h
+@@ -130,6 +130,13 @@ struct hep_iphdr{
+         struct in_addr hp_dst;      /* source and dest address */
+ };
+ 
++/* HEPv2 */
++struct hep_timehdr{
++    uint32_t tv_sec;         /* seconds */
++    uint32_t tv_usec;        /* useconds */
++    uint16_t captid;          /* Capture ID node */
++};
++
+ #if SU_HAVE_IN6
+ struct hep_ip6hdr {
+ 	struct in6_addr hp6_src;        /* source address */
+@@ -137,6 +144,73 @@ struct hep_ip6hdr {
+ };
+ #endif
+ 
++/* HEPv3 types */
++struct hep_chunk {
++       uint16_t vendor_id;
++       uint16_t type_id;
++       uint16_t length;
++} __attribute__((packed));
++
++typedef struct hep_chunk hep_chunk_t;
++
++struct hep_chunk_uint8 {
++       hep_chunk_t chunk;
++       uint8_t data;
++} __attribute__((packed));
++
++typedef struct hep_chunk_uint8 hep_chunk_uint8_t;
++
++struct hep_chunk_uint16 {
++       hep_chunk_t chunk;
++       uint16_t data;
++} __attribute__((packed));
++
++typedef struct hep_chunk_uint16 hep_chunk_uint16_t;
++
++struct hep_chunk_uint32 {
++       hep_chunk_t chunk;
++       uint32_t data;
++} __attribute__((packed));
++
++typedef struct hep_chunk_uint32 hep_chunk_uint32_t;
++
++struct hep_chunk_str {
++       hep_chunk_t chunk;
++       char *data;
++} __attribute__((packed));
++
++typedef struct hep_chunk_str hep_chunk_str_t;
++
++struct hep_chunk_ip4 {
++       hep_chunk_t chunk;
++       struct in_addr data;
++} __attribute__((packed));
++
++typedef struct hep_chunk_ip4 hep_chunk_ip4_t;
++
++struct hep_chunk_ip6 {
++       hep_chunk_t chunk;
++       struct in6_addr data;
++} __attribute__((packed));
++
++typedef struct hep_chunk_ip6 hep_chunk_ip6_t;
++
++struct hep_chunk_payload {
++    hep_chunk_t chunk;
++    char *data;
++} __attribute__((packed));
++
++typedef struct hep_chunk_payload hep_chunk_payload_t;
++
++
++struct hep_ctrl {
++    char id[4];
++    uint16_t length;
++} __attribute__((packed));
++
++typedef struct hep_ctrl hep_ctrl_t;
++
++
+ /** Maximum size when streaming. */
+ #define MSG_SSIZE_MAX (USIZE_MAX)
+ 
+diff --git a/libs/sofia-sip/libsofia-sip-ua/tport/tport_internal.h b/libs/sofia-sip/libsofia-sip-ua/tport/tport_internal.h
+index f18fc93..5f39220 100644
+--- a/libs/sofia-sip/libsofia-sip-ua/tport/tport_internal.h
++++ b/libs/sofia-sip/libsofia-sip-ua/tport/tport_internal.h
+@@ -306,6 +306,8 @@ struct tport_master {
+   su_socket_t         mr_capt_sock;
+   char               *mr_capt_name;	/**< Servername for capturing received/sent data */  
+   tport_primary_t    *mr_primaries;        /**< List of primary contacts */
++  unsigned	      mr_prot_ver;	/* hep version */
++  unsigned	      mr_agent_id;      /* agent version */
+ 
+   tport_params_t      mr_params[1];
+ 
+diff --git a/libs/sofia-sip/libsofia-sip-ua/tport/tport_logging.c b/libs/sofia-sip/libsofia-sip-ua/tport/tport_logging.c
+index 5121435..ee0950d 100644
+--- a/libs/sofia-sip/libsofia-sip-ua/tport/tport_logging.c
++++ b/libs/sofia-sip/libsofia-sip-ua/tport/tport_logging.c
+@@ -143,7 +143,11 @@ int tport_open_log(tport_master_t *mr, tagi_t *tags)
+         char *captname, *p, *host_s;
+         char port[10];
+         su_addrinfo_t *ai = NULL, hints[1] = {{ 0 }};
+-        unsigned len =0;
++        unsigned len =0, iport = 0;
++        
++        /* default values for capture protocol and agent id */
++        mr->mr_prot_ver = 2;
++        mr->mr_agent_id = 200;
+ 
+         if (mr->mr_capt_name && mr->mr_capt_sock && strcmp(capt, mr->mr_capt_name) == 0)                
+               return n;
+@@ -173,17 +177,52 @@ int tport_open_log(tport_master_t *mr, tagi_t *tags)
+         /*the address contains a port number*/
+         *p = '\0';
+         p++;
++        
++        iport = atoi(p);
+ 
+-        if (atoi(p) <1024  || atoi(p)>65536)
++        if (iport <1024 || iport >65536)
+         {
+                 su_log("invalid port number; must be in [1024,65536]\n");
+                 return n;
+         }
+-
+-        strncpy(port, p, sizeof(port));
+-                        
+-        *p = '\0'; 
+         
++        snprintf(port, sizeof(port), "%d", iport);
++        
++        /* get all params */      
++        while(p) 
++        {        
++                /* check ; in the URL */
++                if( (p = strrchr(p+1, ';')) == 0 ) {                        
++                        break;
++                }
++
++                *p = '\0'; 
++                p++;                
++                        
++                if(strncmp(p, "hep=",4) == 0) {
++                        p+=4;
++                        mr->mr_prot_ver = atoi(p);                    
++                        /* hepv3 come later */                                                                            
++                        if (mr->mr_prot_ver < 1 || mr->mr_prot_ver > 2)
++                        {
++                                su_log("invalid hep version number; must be in [1-3]\n");
++                                return n;
++                        }
++                }
++                else if(strncmp(p, "capture_id=", 11) == 0) {
++                        p+=11;
++                        if(mr->mr_agent_id = atoi(p)) == 0)
++                        {
++                                su_log("invalid capture id number; must be uint32 \n");
++                                return n;
++                        }
++                }
++                else {
++                       su_log("unsupported capture param\n"); 
++                       return n;
++                }
++        }  
++                                        
+         /* check if we have [] */
+         if (host_s[0] == '[') {
+               len = strlen(host_s + 1) - 1;              
+@@ -359,10 +398,13 @@ void tport_capt_msg(tport_t const *self, msg_t *msg, size_t n,
+    int buflen = 0, error;
+    su_sockaddr_t const *su, *su_self;
+    struct hep_hdr hep_header;
++   su_time_t now;
+ #if __sun__
+    struct hep_iphdr hep_ipheader = {{{{0}}}};
++   struct hep_timehdr hep_time = {{{{0}}}};
+ #else
+-   struct hep_iphdr hep_ipheader = {{0}};   
++   struct hep_iphdr hep_ipheader = {{0}};  
++   struct hep_timehdr hep_time = {{0}}; 
+ #endif
+ #if SU_HAVE_IN6
+    struct hep_ip6hdr hep_ip6header = {{{{0}}}};
+@@ -374,6 +416,8 @@ void tport_capt_msg(tport_t const *self, msg_t *msg, size_t n,
+ 
+    assert(self); assert(msg);
+ 
++
++
+    su = msg_addr(msg);
+    su_self = self->tp_pri->pri_primary->tp_addr;
+ 
+@@ -389,7 +433,8 @@ void tport_capt_msg(tport_t const *self, msg_t *msg, size_t n,
+    buffer = (void*)malloc(eth_frame_len);
+ 
+    /* VOIP Header */   
+-   hep_header.hp_v =  1;
++   //tport_capt_msg
++   hep_header.hp_v =  mr->mr_prot_ver;
+    hep_header.hp_f = su->su_family; 
+    /* Header Length */   
+    hep_header.hp_l = sizeof(struct hep_hdr);   
+@@ -423,6 +468,9 @@ void tport_capt_msg(tport_t const *self, msg_t *msg, size_t n,
+    hep_header.hp_dport = dst ? su->su_port : su_self->su_port;
+    hep_header.hp_sport = dst ? su_self->su_port : su->su_port;
+ 
++   if (hep_header.hp_v == 2){
++           hep_header.hp_l += sizeof(struct hep_timehdr);           
++   }
+       
+    /* Copy hepheader */
+    memset(buffer, '\0', eth_frame_len);
+@@ -444,6 +492,17 @@ void tport_capt_msg(tport_t const *self, msg_t *msg, size_t n,
+        goto done;
+    }           
+    
++   /* copy time header */              
++   if (hep_header.hp_v == 2) {   
++        /* now */
++        now = su_now();
++        hep_time.tv_sec = now.tv_sec;
++        hep_time.tv_usec = now.tv_usec;
++        hep_time.captid = mr->mr_agent_id;
++        memcpy((void*)buffer+buflen, &hep_time, sizeof(struct hep_timehdr));
++        buflen += sizeof(struct hep_timehdr);
++   }                    
++   
+    for (i = 0; i < iovused && n > 0; i++) {
+        size_t len = iov[i].mv_len;
+        if (len > n)
