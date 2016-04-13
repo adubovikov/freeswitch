@@ -306,6 +306,8 @@ struct tport_master {
   su_socket_t         mr_capt_sock;
   char               *mr_capt_name;	/**< Servername for capturing received/sent data */  
   tport_primary_t    *mr_primaries;        /**< List of primary contacts */
+  unsigned	      mr_prot_ver;	/* hep version */
+  unsigned	      mr_agent_id;      /* agent version */
 
   tport_params_t      mr_params[1];
 
