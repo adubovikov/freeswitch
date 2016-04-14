@@ -211,7 +211,7 @@ int tport_open_log(tport_master_t *mr, tagi_t *tags)
                 }
                 else if(strncmp(p, "capture_id=", 11) == 0) {
                         p+=11;
-                        if(mr->mr_agent_id = atoi(p)) == 0)
+                        if((mr->mr_agent_id = atoi(p)) == 0)
                         {
                                 su_log("invalid capture id number; must be uint32 \n");
                                 return n;
@@ -398,13 +398,12 @@ void tport_capt_msg(tport_t const *self, msg_t *msg, size_t n,
    int buflen = 0, error;
    su_sockaddr_t const *su, *su_self;
    struct hep_hdr hep_header;
+   struct hep_timehdr hep_time = {0};
    su_time_t now;
 #if __sun__
    struct hep_iphdr hep_ipheader = {{{{0}}}};
-   struct hep_timehdr hep_time = {{{{0}}}};
 #else
    struct hep_iphdr hep_ipheader = {{0}};  
-   struct hep_timehdr hep_time = {{0}}; 
 #endif
 #if SU_HAVE_IN6
    struct hep_ip6hdr hep_ip6header = {{{{0}}}};
