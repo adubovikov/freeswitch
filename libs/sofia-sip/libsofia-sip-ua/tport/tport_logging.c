@@ -398,7 +398,7 @@ void tport_capt_msg(tport_t const *self, msg_t *msg, size_t n,
    int buflen = 0, error;
    su_sockaddr_t const *su, *su_self;
    struct hep_hdr hep_header;
-   struct hep_timehdr hep_time = {0};
+   struct hep_timehdr hep_time = {0};    
    su_time_t now;
 #if __sun__
    struct hep_iphdr hep_ipheader = {{{{0}}}};
@@ -414,8 +414,6 @@ void tport_capt_msg(tport_t const *self, msg_t *msg, size_t n,
    tport_master_t *mr;
 
    assert(self); assert(msg);
-
-
 
    su = msg_addr(msg);
    su_self = self->tp_pri->pri_primary->tp_addr;
@@ -495,8 +493,14 @@ void tport_capt_msg(tport_t const *self, msg_t *msg, size_t n,
    if (hep_header.hp_v == 2) {   
         /* now */
         now = su_now();
+        /* should check for ifdef HAVE_LOCALTIME_R instead -_- */
+#if defined(HAVE_GETTIMEOFDAY) || defined(HAVE_CLOCK_MONOTONIC)
+        hep_time.tv_sec = (now.tv_sec - SU_TIME_EPOCH); /* see su_time0.c 'now' is not really 'now', so we decrease it by SU_TIME_EPOCH */
+#else
         hep_time.tv_sec = now.tv_sec;
+#endif
         hep_time.tv_usec = now.tv_usec;
+
         hep_time.captid = mr->mr_agent_id;
         memcpy((void*)buffer+buflen, &hep_time, sizeof(struct hep_timehdr));
         buflen += sizeof(struct hep_timehdr);
