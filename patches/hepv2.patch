@@ -183,7 +183,7 @@ index 5121435..ee0950d 100644
 +                }
 +                else if(strncmp(p, "capture_id=", 11) == 0) {
 +                        p+=11;
-+                        if(mr->mr_agent_id = atoi(p)) == 0)
++                        if((mr->mr_agent_id = atoi(p)) == 0)
 +                        {
 +                                su_log("invalid capture id number; must be uint32 \n");
 +                                return n;
@@ -205,11 +205,11 @@ index 5121435..ee0950d 100644
 +   su_time_t now;
  #if __sun__
     struct hep_iphdr hep_ipheader = {{{{0}}}};
-+   struct hep_timehdr hep_time = {{{{0}}}};
++   struct hep_timehdr hep_time = {0};
  #else
 -   struct hep_iphdr hep_ipheader = {{0}};   
 +   struct hep_iphdr hep_ipheader = {{0}};  
-+   struct hep_timehdr hep_time = {{0}}; 
++   struct hep_timehdr hep_time = {0}; 
  #endif
  #if SU_HAVE_IN6
     struct hep_ip6hdr hep_ip6header = {{{{0}}}};
