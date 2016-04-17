@@ -13,7 +13,7 @@
 
     -->
     
-    <!-- <param name="capture-server" value="udp:homer.domain.com:5060;hep=2;capture_id=100"/> -->
+    <!-- <param name="capture-server" value="udp:homer.domain.com:5060;hep=3;capture_id=100"/> -->
   </global_settings>
 
   <!--
