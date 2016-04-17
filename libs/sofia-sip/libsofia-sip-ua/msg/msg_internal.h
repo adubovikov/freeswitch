@@ -202,13 +202,26 @@ struct hep_chunk_payload {
 
 typedef struct hep_chunk_payload hep_chunk_payload_t;
 
-
 struct hep_ctrl {
     char id[4];
     uint16_t length;
 } __attribute__((packed));
 
 typedef struct hep_ctrl hep_ctrl_t;
+
+struct hep_generic {
+        hep_ctrl_t         header;
+        hep_chunk_uint8_t  ip_family;
+        hep_chunk_uint8_t  ip_proto;
+        hep_chunk_uint16_t src_port;
+        hep_chunk_uint16_t dst_port;
+        hep_chunk_uint32_t time_sec;
+        hep_chunk_uint32_t time_usec;
+        hep_chunk_uint8_t  proto_t;
+        hep_chunk_uint32_t capt_id;
+} __attribute__((packed));
+
+typedef struct hep_generic hep_generic_t;
 
 
 /** Maximum size when streaming. */
